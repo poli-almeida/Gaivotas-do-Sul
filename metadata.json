@@ -1,8 +1,5 @@
 {
-  "name": "Gaivotas do Sul - Gestão de Serviços",
-  "description": "Um aplicativo premium para metrificação e contratação de serviços residenciais e corporativos como limpeza, manutenção, jardinagem e gestão digital.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
+  "name": "Gaivotas do Sul - Gestão Patrimonial",
+  "description": "Plataforma premium para metrificação e contratação de serviços de zeladoria e gestão de aluguéis por temporada.",
+  "requestFramePermissions": []
 }

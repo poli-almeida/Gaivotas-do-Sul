@@ -14,7 +14,6 @@ const App: React.FC = () => {
   const [selectedServices, setSelectedServices] = useState<Map<string, ServiceState>>(new Map());
   const [isCoHostSelected, setIsCoHostSelected] = useState(false);
   const [estimatedRevenue, setEstimatedRevenue] = useState<number>(5000);
-  const [isScrolled, setIsScrolled] = useState(false);
   
   // Checkout Asaas
   const [showCustomerForm, setShowCustomerForm] = useState(false);
@@ -22,12 +21,6 @@ const App: React.FC = () => {
   const [checkoutResult, setCheckoutResult] = useState<AsaasPaymentResponse | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerData>({ name: '', cpfCnpj: '', email: '' });
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 150);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   const toggleService = useCallback((id: string) => {
     setSelectedServices((prev: Map<string, ServiceState>) => {
@@ -93,24 +86,24 @@ const App: React.FC = () => {
     setError(null);
     try {
       let desc = currentSelectedItems.map(i => i.name).join(', ');
-      if (isCoHostSelected) desc += `, ${CO_HOST_SERVICE.name} (Est. ${coHostFee})`;
+      if (isCoHostSelected) desc += `, ${CO_HOST_SERVICE.name} (Comissão)`;
       
       const result = await createAsaasCheckout(customerForm, totalValue, desc);
       setCheckoutResult(result);
       setShowCustomerForm(false);
     } catch (err: any) {
-      setError(err.message || "Erro ao conectar com Asaas.");
+      setError(err.message || "Erro ao conectar com Asaas. Verifique os dados.");
     } finally {
       setIsCheckoutLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7fa] pb-48">
+    <div className="min-h-screen bg-[#f4f7fa] pb-60">
       {/* Customer Modal */}
       {showCustomerForm && (
-        <div className="fixed inset-0 z-[210] bg-blue-950/70 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-t-[3.5rem] md:rounded-[4rem] p-8 md:p-14 w-full max-w-lg shadow-2xl relative overflow-hidden">
+        <div className="fixed inset-0 z-[210] bg-blue-950/70 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6">
+          <div className="bg-white rounded-t-[3.5rem] md:rounded-[4rem] p-8 md:p-14 w-full max-w-lg shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom duration-300">
             <button onClick={() => setShowCustomerForm(false)} className="absolute top-10 right-10 text-gray-400">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -148,7 +141,7 @@ const App: React.FC = () => {
                 disabled={isCheckoutLoading}
                 className="w-full py-7 bg-blue-900 text-white rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all"
               >
-                {isCheckoutLoading ? 'CONECTANDO...' : 'GERAR COBRANÇA PIX'}
+                {isCheckoutLoading ? 'PROCESSANDO...' : 'ATIVAR MEU PLANO'}
               </button>
             </form>
           </div>
@@ -208,7 +201,6 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="px-6 -mt-24 relative z-20 max-w-5xl mx-auto">
-        {/* Operacionais */}
         <section className="mb-12">
           <div className="flex items-center gap-3 mb-6 ml-4 text-blue-900 font-black text-xs uppercase tracking-[0.3em]">
             <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
@@ -228,7 +220,6 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* Co-anfitriã Premium */}
         <section className="mb-12 pb-12">
           <div className="flex items-center gap-3 mb-6 ml-4 text-amber-600 font-black text-xs uppercase tracking-[0.3em]">
             <div className="w-2 h-8 bg-amber-500 rounded-full"></div>
@@ -248,7 +239,7 @@ const App: React.FC = () => {
               </div>
               <button 
                 onClick={() => setIsCoHostSelected(!isCoHostSelected)}
-                className={`px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest transition-all shadow-xl ${isCoHostSelected ? 'bg-amber-500 text-white shadow-amber-200' : 'bg-gray-900 text-white'}`}
+                className={`px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95 ${isCoHostSelected ? 'bg-amber-500 text-white shadow-amber-200' : 'bg-gray-900 text-white'}`}
               >
                 {isCoHostSelected ? 'GESTÃO ATIVA' : 'ATIVAR CO-ANFITRIÃ'}
               </button>
@@ -282,28 +273,28 @@ const App: React.FC = () => {
         </section>
       </main>
 
-      {/* Persistent Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-8 bg-white/95 backdrop-blur-3xl border-t border-gray-100 z-50 shadow-[0_-30px_80px_rgba(0,0,0,0.1)]">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-8 justify-between">
+      {/* Final Fixed Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 md:p-8 bg-white/95 backdrop-blur-3xl border-t border-gray-100 z-50 shadow-[0_-30px_80px_rgba(0,0,0,0.1)]">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-6 md:gap-8 justify-between">
           <div className="flex flex-col text-center md:text-left">
-            <span className="text-[11px] text-blue-600 font-black uppercase tracking-[0.4em] mb-2">Total Consolidado Gaivotas</span>
+            <span className="text-[11px] text-blue-600 font-black uppercase tracking-[0.4em] mb-1">Investimento Total Gaivotas</span>
             <div className="text-5xl font-black text-blue-900 tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
           </div>
           <div className="flex gap-4 w-full md:w-auto">
-            {/* Botão de PDF sem o cérebro */}
+            {/* Download PDF Button (Replaces Brain Icon) */}
             <button 
               onClick={handleGeneratePDF}
               disabled={totalValue === 0}
-              title="Gerar Proposta PDF"
-              className={`flex-none p-6 rounded-full transition-all shadow-xl active:scale-90 flex items-center justify-center ${
-                totalValue === 0 ? 'bg-gray-100 text-gray-300' : 'bg-gray-50 text-blue-900 hover:bg-blue-50'
+              title="Baixar Relatório PDF"
+              className={`flex-none p-6 rounded-[2rem] transition-all shadow-xl active:scale-90 flex items-center justify-center ${
+                totalValue === 0 ? 'bg-gray-100 text-gray-300' : 'bg-gray-50 text-blue-900 hover:bg-blue-100 border border-blue-100'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
-            {/* Botão Principal alterado para "ATIVAR MEU PLANO" */}
+            {/* Primary Action Button: "ATIVAR MEU PLANO" */}
             <button 
               className={`flex-1 md:flex-none px-12 py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] transition-all transform active:scale-95 shadow-2xl ${
                 totalValue === 0 ? 'bg-gray-200 text-gray-400' : 'bg-blue-900 text-white hover:bg-black'
