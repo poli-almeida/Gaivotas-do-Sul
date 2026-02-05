@@ -1,21 +1,16 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { SERVICES_DATA, APP_THEME, FREQUENCY_OPTIONS, CO_HOST_SERVICE } from './constants';
+import React, { useState, useMemo, useCallback } from 'react';
+import { SERVICES_DATA, FREQUENCY_OPTIONS, CO_HOST_SERVICE, CO_HOST_CHECKLIST, TOKENS } from './constants';
 import { SelectedService, CustomerData, AsaasPaymentResponse } from './types';
 import { ServiceCard } from './components/ServiceCard';
 import { createAsaasCheckout } from './services/asaasService';
 import { generateProposalPDF } from './services/pdfService';
 
-interface ServiceState {
-  frequencyId: string;
-}
-
 const App: React.FC = () => {
-  const [selectedServices, setSelectedServices] = useState<Map<string, ServiceState>>(new Map());
+  const [selectedServices, setSelectedServices] = useState<Map<string, { frequencyId: string }>>(new Map());
   const [isCoHostSelected, setIsCoHostSelected] = useState(false);
-  const [estimatedRevenue, setEstimatedRevenue] = useState<number>(5000);
+  const [estimatedRevenue, setEstimatedRevenue] = useState<number>(35000);
   
-  // Checkout Asaas
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState<AsaasPaymentResponse | null>(null);
@@ -23,24 +18,18 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const toggleService = useCallback((id: string) => {
-    setSelectedServices((prev: Map<string, ServiceState>) => {
+    setSelectedServices(prev => {
       const next = new Map(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.set(id, { frequencyId: 'mensal' });
-      }
+      if (next.has(id)) next.delete(id);
+      else next.set(id, { frequencyId: 'mensal' });
       return next;
     });
   }, []);
 
   const updateFrequency = useCallback((serviceId: string, freqId: string) => {
-    setSelectedServices((prev: Map<string, ServiceState>) => {
+    setSelectedServices(prev => {
       const next = new Map(prev);
-      const current = next.get(serviceId);
-      if (current) {
-        next.set(serviceId, { ...current, frequencyId: freqId });
-      }
+      next.set(serviceId, { frequencyId: freqId });
       return next;
     });
   }, []);
@@ -49,35 +38,20 @@ const App: React.FC = () => {
     return Array.from(selectedServices.entries()).map(([id, state]) => {
       const service = SERVICES_DATA.find(s => s.id === id)!;
       const frequency = FREQUENCY_OPTIONS.find(f => f.id === state.frequencyId)!;
-      return {
-        ...service,
-        quantity: 1,
-        frequency
-      } as SelectedService;
+      return { ...service, quantity: 1, frequency } as SelectedService;
     });
   }, [selectedServices]);
 
-  const coHostFee = useMemo(() => {
-    return isCoHostSelected ? estimatedRevenue * CO_HOST_SERVICE.commissionRate : 0;
-  }, [isCoHostSelected, estimatedRevenue]);
-
+  const coHostFee = useMemo(() => isCoHostSelected ? estimatedRevenue * CO_HOST_SERVICE.commissionRate : 0, [isCoHostSelected, estimatedRevenue]);
+  
   const totalValue = useMemo(() => {
-    const servicesTotal = currentSelectedItems.reduce((acc, item) => {
-      return acc + (item.basePrice * item.frequency.multiplier);
-    }, 0);
+    const servicesTotal = currentSelectedItems.reduce((acc, item) => acc + (item.basePrice * item.frequency.multiplier), 0);
     return servicesTotal + coHostFee;
   }, [currentSelectedItems, coHostFee]);
 
   const handleGeneratePDF = () => {
     if (totalValue === 0) return;
-    generateProposalPDF(
-      currentSelectedItems,
-      isCoHostSelected,
-      estimatedRevenue,
-      coHostFee,
-      totalValue,
-      customerForm.name ? customerForm : undefined
-    );
+    generateProposalPDF(currentSelectedItems, isCoHostSelected, estimatedRevenue, coHostFee, totalValue, customerForm.name ? customerForm : undefined);
   };
 
   const processAsaasPayment = async (e: React.FormEvent) => {
@@ -85,228 +59,181 @@ const App: React.FC = () => {
     setIsCheckoutLoading(true);
     setError(null);
     try {
-      let desc = currentSelectedItems.map(i => i.name).join(', ');
-      if (isCoHostSelected) desc += `, ${CO_HOST_SERVICE.name} (Comissão)`;
-      
+      const desc = [...currentSelectedItems.map(i => i.name), isCoHostSelected ? 'Gestão Digital' : ''].filter(Boolean).join(', ');
       const result = await createAsaasCheckout(customerForm, totalValue, desc);
       setCheckoutResult(result);
       setShowCustomerForm(false);
     } catch (err: any) {
-      setError(err.message || "Erro ao conectar com Asaas. Verifique os dados.");
+      setError(err.message || "Houve um problema com a conexão.");
     } finally {
       setIsCheckoutLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7fa] pb-60">
-      {/* Customer Modal */}
+    <div className="min-h-screen bg-white pb-64">
+      
+      {/* Checkout Modals */}
       {showCustomerForm && (
-        <div className="fixed inset-0 z-[210] bg-blue-950/70 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6">
-          <div className="bg-white rounded-t-[3.5rem] md:rounded-[4rem] p-8 md:p-14 w-full max-w-lg shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom duration-300">
-            <button onClick={() => setShowCustomerForm(false)} className="absolute top-10 right-10 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <h3 className="font-black text-blue-900 text-3xl uppercase tracking-tighter mb-1">Elite Checkout</h3>
-            <p className="text-gray-400 text-xs mb-10 font-bold uppercase tracking-[0.2em]">Gaivotas do Sul & Asaas</p>
-            
-            <form onSubmit={processAsaasPayment} className="space-y-6">
-              <input 
-                required
-                className="w-full p-6 bg-gray-50 border-2 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none transition-all font-semibold text-blue-900"
-                placeholder="NOME COMPLETO"
-                value={customerForm.name}
-                onChange={e => setCustomerForm({...customerForm, name: e.target.value})}
-              />
-              <input 
-                required
-                className="w-full p-6 bg-gray-50 border-2 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none transition-all font-semibold text-blue-900"
-                placeholder="CPF OU CNPJ"
-                value={customerForm.cpfCnpj}
-                onChange={e => setCustomerForm({...customerForm, cpfCnpj: e.target.value})}
-              />
-              <input 
-                required
-                type="email"
-                className="w-full p-6 bg-gray-50 border-2 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none transition-all font-semibold text-blue-900"
-                placeholder="E-MAIL"
-                value={customerForm.email}
-                onChange={e => setCustomerForm({...customerForm, email: e.target.value})}
-              />
-              {error && <div className="text-red-600 text-[10px] font-black uppercase text-center bg-red-50 p-4 rounded-2xl border border-red-100">{error}</div>}
-              <button 
-                type="submit"
-                disabled={isCheckoutLoading}
-                className="w-full py-7 bg-blue-900 text-white rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all"
-              >
-                {isCheckoutLoading ? 'PROCESSANDO...' : 'ATIVAR MEU PLANO'}
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[40px] p-10 w-full max-w-md shadow-2xl">
+            <h3 className="text-2xl font-black text-[#040136] mb-1">Finalizar Plano</h3>
+            <p className="text-slate-400 text-xs mb-8 font-bold uppercase tracking-widest">Confirmação de Ativação</p>
+            <form onSubmit={processAsaasPayment} className="space-y-4">
+              <input required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#0049FF] font-semibold text-[#040136]" placeholder="NOME COMPLETO" value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} />
+              <input required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#0049FF] font-semibold text-[#040136]" placeholder="CPF OU CNPJ" value={customerForm.cpfCnpj} onChange={e => setCustomerForm({...customerForm, cpfCnpj: e.target.value})} />
+              <input required type="email" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#0049FF] font-semibold text-[#040136]" placeholder="E-MAIL" value={customerForm.email} onChange={e => setCustomerForm({...customerForm, email: e.target.value})} />
+              <button disabled={isCheckoutLoading} className="w-full py-5 bg-[#0049FF] text-white rounded-2xl font-black text-xs tracking-widest hover:bg-[#040136] transition-all">
+                {isCheckoutLoading ? 'CONFIGURANDO...' : 'ATIVAR AGORA'}
               </button>
+              <button type="button" onClick={() => setShowCustomerForm(false)} className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest py-2">Voltar</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Pix Modal */}
-      {checkoutResult && (
-        <div className="fixed inset-0 z-[220] bg-blue-950/98 backdrop-blur-3xl flex items-center justify-center p-6 animate-in zoom-in duration-300">
-          <div className="bg-white rounded-[5rem] p-12 max-w-md w-full shadow-2xl relative border-t-[16px] border-blue-600">
-            <button onClick={() => setCheckoutResult(null)} className="absolute top-10 right-10 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="text-center mb-8">
-              <div className="bg-blue-600 text-white w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 text-4xl shadow-2xl shadow-blue-200">💎</div>
-              <h3 className="font-black text-blue-900 text-3xl uppercase tracking-tighter mb-2">Pague Agora</h3>
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Escaneie o QR Code no Local</p>
-            </div>
-            <div className="bg-blue-50 rounded-[3rem] p-8 mb-10 border border-blue-100 text-center">
-              <div className="text-5xl font-black text-blue-900 tracking-tighter">R$ {checkoutResult.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            </div>
-            <div className="flex flex-col items-center gap-8">
-               <div className="bg-white p-6 rounded-[3rem] shadow-xl border-2 border-blue-50">
-                  <img src={`data:image/png;base64,${checkoutResult.pixQrCodeBase64}`} alt="Pix" className="w-60 h-60 object-contain" />
-               </div>
-               <button 
-                className="w-full py-6 bg-blue-900 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-                onClick={() => { navigator.clipboard.writeText(checkoutResult.pixCode); alert("Copiado!"); }}
-               >
-                 COPIAR PIX COPIA E COLA
-               </button>
-            </div>
-          </div>
+      {/* Header - Apenas a Big Idea e Identidade */}
+      <header className="bg-[#040136] pt-24 pb-48 px-8 rounded-b-[80px] text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+          <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-blue-500 rounded-full blur-[120px]"></div>
         </div>
-      )}
-
-      {/* Header */}
-      <header className={`pt-20 pb-40 px-6 text-white bg-gradient-to-br ${APP_THEME.bgGradient} rounded-b-[6rem] shadow-2xl relative overflow-hidden`}>
-        <div className="relative z-10 flex flex-col items-center text-center max-w-lg mx-auto">
-          <div className="flex items-center gap-4 mb-10 bg-white/10 px-10 py-4 rounded-full backdrop-blur-3xl border border-white/20 shadow-2xl">
-            <span className="text-5xl">🕊️</span>
-            <h1 className="text-3xl font-black tracking-widest uppercase text-blue-50">Gaivotas do Sul</h1>
-          </div>
-          <div className="bg-white rounded-[4rem] p-10 border border-white/30 shadow-[0_50px_100px_rgba(0,0,0,0.2)] mb-8 w-full">
-             <span className="text-[11px] font-black text-blue-900/40 uppercase tracking-[0.5em] block mb-3">Investimento Estratégico Mensal</span>
-             <div className="text-6xl font-black text-blue-900 tracking-tighter">
-               R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-             </div>
-             <div className="mt-5 flex justify-center gap-3">
-                <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-4 py-2 rounded-2xl uppercase border border-blue-100">PROPOSTA COMERCIAL</span>
-             </div>
-          </div>
+        
+        <div className="max-w-4xl mx-auto relative z-10">
+          <h2 className="text-white font-black tracking-[0.8em] text-[10px] uppercase mb-12 opacity-40">
+            Gaivotas do Sul
+          </h2>
+          <h1 className="text-4xl md:text-7xl font-extrabold text-white tracking-tighter leading-[1.05] text-balance">
+            Rentabilidade Máxima e Segurança Total para seu Patrimônio.
+          </h1>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="px-6 -mt-24 relative z-20 max-w-5xl mx-auto">
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-6 ml-4 text-blue-900 font-black text-xs uppercase tracking-[0.3em]">
-            <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-            <h2>Serviços de Zeladoria Técnica</h2>
+      <main className="max-w-7xl mx-auto px-8 -mt-24 relative z-20">
+        {/* Zeladoria Section */}
+        <section className="mb-24">
+          <div className="flex items-center gap-4 mb-10 ml-4">
+            <div className="h-6 w-1 bg-[#0049FF] rounded-full"></div>
+            <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em]">Zeladoria & Operação</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {SERVICES_DATA.map((service) => (
               <ServiceCard 
-                key={service.id}
-                service={service}
-                isSelected={selectedServices.has(service.id)}
-                selectedFrequencyId={selectedServices.get(service.id)?.frequencyId || ''}
-                onToggle={toggleService}
-                onUpdateFrequency={updateFrequency}
+                key={service.id} 
+                service={service} 
+                isSelected={selectedServices.has(service.id)} 
+                selectedFrequencyId={selectedServices.get(service.id)?.frequencyId || ''} 
+                onToggle={toggleService} 
+                onUpdateFrequency={updateFrequency} 
               />
             ))}
           </div>
         </section>
 
-        <section className="mb-12 pb-12">
-          <div className="flex items-center gap-3 mb-6 ml-4 text-amber-600 font-black text-xs uppercase tracking-[0.3em]">
-            <div className="w-2 h-8 bg-amber-500 rounded-full"></div>
-            <h2>Gestão Digital & Rentabilidade</h2>
+        {/* Co-Anfitriã Section com Checklist de Valor */}
+        <section className="pb-32">
+          <div className="flex items-center gap-4 mb-10 ml-4">
+            <div className="h-6 w-1 bg-[#FFB800] rounded-full"></div>
+            <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em]">Gestão Digital & Rendimento</h2>
           </div>
-          <div className={`relative p-10 rounded-[4rem] border-4 transition-all duration-700 bg-white flex flex-col gap-10 ${isCoHostSelected ? 'border-amber-400 shadow-2xl scale-[1.01]' : 'border-gray-100'}`}>
-            <div className="flex flex-col md:flex-row gap-8 items-center">
-              <div className={`text-6xl p-8 rounded-[3rem] transition-all duration-700 ${isCoHostSelected ? 'bg-amber-50 rotate-3' : 'bg-gray-50'}`}>
-                {CO_HOST_SERVICE.icon}
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h3 className="font-black text-3xl text-gray-900 leading-none mb-4">{CO_HOST_SERVICE.name}</h3>
-                <p className="text-gray-500 text-sm font-medium leading-relaxed max-w-md">{CO_HOST_SERVICE.description}</p>
-                <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
-                   <span className="text-[9px] font-black bg-amber-100 text-amber-700 px-3 py-1 rounded-full uppercase tracking-widest">COMISSÃO 20% SOBRE ALUGUÉIS</span>
+          
+          <div className={`rounded-[56px] bg-white border-2 transition-all duration-700 relative overflow-hidden ${isCoHostSelected ? 'border-[#FFB800] shadow-2xl' : 'border-slate-100 shadow-sm'}`}>
+            <div className="p-10 md:p-16">
+              <div className="flex flex-col md:flex-row items-start gap-12">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-4">
+                    <span className="text-4xl">📱</span>
+                    <h3 className="text-3xl font-black text-[#040136] tracking-tight">{CO_HOST_SERVICE.name}</h3>
+                  </div>
+                  <p className="text-slate-500 text-lg leading-relaxed mb-10 font-medium">
+                    {CO_HOST_SERVICE.description}
+                  </p>
+                  
+                  {/* Checklist de Entrega de Valor */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {CO_HOST_CHECKLIST.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <div className="flex-none w-5 h-5 rounded-full bg-orange-50 flex items-center justify-center">
+                          <svg className="w-3 h-3 text-[#FFB800]" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                        </div>
+                        <span className="text-sm font-bold text-slate-600">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-none w-full md:w-auto flex flex-col items-center gap-4">
+                   <div className="bg-orange-50 text-[#FFB800] px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase mb-4">
+                     Taxa de Sucesso: 20%
+                   </div>
+                   <button 
+                    onClick={() => setIsCoHostSelected(!isCoHostSelected)} 
+                    className={`w-full md:w-64 py-7 rounded-[28px] font-black text-xs tracking-widest transition-all transform active:scale-95 shadow-xl ${isCoHostSelected ? 'bg-[#FFB800] text-white' : 'bg-[#040136] text-white'}`}
+                  >
+                    {isCoHostSelected ? 'GESTÃO ATIVA' : 'ATIVAR GESTÃO'}
+                  </button>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsCoHostSelected(!isCoHostSelected)}
-                className={`px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95 ${isCoHostSelected ? 'bg-amber-500 text-white shadow-amber-200' : 'bg-gray-900 text-white'}`}
-              >
-                {isCoHostSelected ? 'GESTÃO ATIVA' : 'ATIVAR CO-ANFITRIÃ'}
-              </button>
-            </div>
 
-            {isCoHostSelected && (
-              <div className="pt-8 border-t-2 border-dashed border-gray-100 animate-in slide-in-from-top-4 duration-500">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                  <div className="flex-1 w-full">
-                    <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 block ml-6">Previsão de Faturamento Mensal (Aluguéis)</label>
-                    <div className="relative">
-                      <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xl">R$</span>
-                      <input 
-                        type="number"
-                        className="w-full pl-20 pr-8 py-6 bg-amber-50/50 border-2 border-amber-100 rounded-[2.5rem] text-3xl font-black text-blue-900 outline-none focus:border-amber-400 transition-all"
-                        value={estimatedRevenue}
-                        onChange={(e) => setEstimatedRevenue(Number(e.target.value))}
-                      />
+              {isCoHostSelected && (
+                <div className="mt-16 pt-16 border-t border-slate-100 animate-in slide-in-from-bottom duration-500">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end">
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] ml-6">Previsão de Faturamento Mensal</label>
+                      <div className="relative">
+                        <span className="absolute left-10 top-1/2 -translate-y-1/2 font-black text-[#040136] text-2xl">R$</span>
+                        <input 
+                          type="number" 
+                          className="w-full pl-24 pr-10 py-8 bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-[32px] text-4xl font-black text-[#040136] outline-none transition-all" 
+                          value={estimatedRevenue} 
+                          onChange={e => setEstimatedRevenue(Number(e.target.value))} 
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-[#040136] text-white p-12 rounded-[40px] relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path></svg>
+                      </div>
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.3em] block mb-3">Comissão Gaivotas (20%)</span>
+                      <div className="text-4xl font-black tracking-tight">R$ {coHostFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                      <p className="text-[9px] font-bold text-white/20 mt-4 uppercase tracking-widest">Valor variável por performance</p>
                     </div>
                   </div>
-                  <div className="text-center md:text-right bg-blue-900 text-white p-10 rounded-[3rem] min-w-[280px] shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">📊</div>
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60 block mb-1">Comissão Gaivotas (20%)</span>
-                    <div className="text-4xl font-black tracking-tighter">R$ {coHostFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                    <span className="text-[9px] font-bold uppercase mt-2 block opacity-40">Valor variável por performance</span>
-                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </section>
       </main>
 
-      {/* Final Fixed Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 md:p-8 bg-white/95 backdrop-blur-3xl border-t border-gray-100 z-50 shadow-[0_-30px_80px_rgba(0,0,0,0.1)]">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-6 md:gap-8 justify-between">
+      {/* Footer Minimalista - Calculadora no Final */}
+      <footer className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[calc(100%-4rem)] max-w-5xl glass-morphism border-2 border-white shadow-[0_50px_100px_rgba(4,1,54,0.12)] rounded-[50px] p-8 z-50">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-10 px-6">
           <div className="flex flex-col text-center md:text-left">
-            <span className="text-[11px] text-blue-600 font-black uppercase tracking-[0.4em] mb-1">Investimento Total Gaivotas</span>
-            <div className="text-5xl font-black text-blue-900 tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-2">Resumo do Investimento</span>
+            <div className="text-3xl font-black text-[#040136] tracking-tighter">
+              <span className="text-lg opacity-40 font-bold mr-2">R$</span>
+              {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
           </div>
           <div className="flex gap-4 w-full md:w-auto">
-            {/* Download PDF Button (Replaces Brain Icon) */}
             <button 
-              onClick={handleGeneratePDF}
+              onClick={handleGeneratePDF} 
               disabled={totalValue === 0}
-              title="Baixar Relatório PDF"
-              className={`flex-none p-6 rounded-[2rem] transition-all shadow-xl active:scale-90 flex items-center justify-center ${
-                totalValue === 0 ? 'bg-gray-100 text-gray-300' : 'bg-gray-50 text-blue-900 hover:bg-blue-100 border border-blue-100'
-              }`}
+              className="w-16 h-16 rounded-full border-2 border-slate-100 flex items-center justify-center text-[#040136] hover:bg-slate-50 transition-all active:scale-90 disabled:opacity-20"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             </button>
-            {/* Primary Action Button: "ATIVAR MEU PLANO" */}
             <button 
-              className={`flex-1 md:flex-none px-12 py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] transition-all transform active:scale-95 shadow-2xl ${
-                totalValue === 0 ? 'bg-gray-200 text-gray-400' : 'bg-blue-900 text-white hover:bg-black'
-              }`}
-              onClick={() => setShowCustomerForm(true)}
+              onClick={() => setShowCustomerForm(true)} 
               disabled={totalValue === 0}
+              className="flex-1 md:flex-none px-12 py-5 bg-[#0049FF] text-white rounded-[24px] font-black text-xs tracking-widest shadow-xl shadow-blue-100 active:scale-95 transition-all disabled:opacity-20"
             >
-              ATIVAR MEU PLANO
+              CONTRATAR PLANO
             </button>
           </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 };
