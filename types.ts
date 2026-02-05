@@ -9,7 +9,7 @@ export enum ServiceCategory {
 export interface FrequencyOption {
   id: string;
   label: string;
-  multiplier: number;
+  multiplier: number; // Representa a quantidade de visitas no mês para o cálculo total
 }
 
 export interface Service {
@@ -17,13 +17,16 @@ export interface Service {
   category: ServiceCategory;
   name: string;
   description: string;
-  basePrice: number;
+  basePrice: number; // Preço base avulso
   icon: string;
 }
 
 export interface SelectedService extends Service {
-  quantity: number;
   frequency: FrequencyOption;
+  // Parâmetros dinâmicos
+  area?: number;
+  floors?: number;
+  isIntense?: boolean;
 }
 
 export interface CustomerData {
